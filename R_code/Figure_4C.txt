@@ -1,0 +1,130 @@
+#### raw data for different gene sets
+
+rm(list = ls())
+library(ggplot2); theme_set(theme_bw(20)); library(reshape2)
+update_geom_defaults("point", aes(size = 4))
+update_geom_defaults("line", aes(size = 3))
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+cbPalette = c("#56B4E9", "#0072B2", "#009E73")
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/DN_DH_bulk/")
+
+## load limm results
+limma <- read.delim("limma_cell_type_contrast_no_replicates_no_PVR_1000_cells_limma_AbATE_combined_p54_6_9_11_13_raw.txt", stringsAsFactors=FALSE)
+cut = c(5e-2)
+sig = subset(limma, adj.P.Val <cut) # 1019 for 1e-2
+
+### load combined anno and subset
+
+anno.full <- read.delim("~/Dropbox/RNAseq/P54_Alice_Jerill_AbATE/P54_11_13_15_combined/P54_6_9_11_13_15_combined_anno.txt")
+
+anno = subset(anno.full, !project == "P54_15") ## examine only Responders
+pvr = ifelse(anno$Stimulation %in% grep("PVR", anno$Stimulation, value = T), 1, 0)
+anno = data.frame(anno, pvr)
+
+anno.p54.6.9 = subset(anno, project == "P54-6_9")
+anno.p54.11 = subset(anno, project == "P54_11")
+anno.p54.13 = subset(anno, project == "P54_13")
+anno.p54.15 = subset(anno, project == "P54_15")
+
+anno.sub = subset(anno, !anno$Stimulation == "none")
+anno.sub = subset(anno.sub, anno.sub$pvr == 0) # N = 30
+
+anno.d1 = subset(anno.sub, barcode %in% grep("496", anno.sub$barcode, value =T)) #14
+anno.d2 = subset(anno.sub, barcode %in% grep("954", anno.sub$barcode, value =T)) # 7
+anno.d3= subset(anno.sub, barcode %in% grep("616", anno.sub$barcode, value =T)) # 9
+
+anno.dn = subset(anno.sub, anno.sub$CellType %in% grep("TIGIT-", anno.sub$CellType, value = T)) # 12
+anno.dp = subset(anno.sub, !anno.sub$CellType %in% grep("TIGIT-", anno.sub$CellType, value = T)) # 18
+
+## load normalized counts and subset
+counts.tmm <- read.delim("TMM_P54_6_9_11_13_15_bulk_combined_counts_outliers_removed_collapsed.txt")
+
+counts = counts.tmm
+counts.sub = subset(counts, select = colnames(counts) %in% anno$libID)
+counts = subset(counts, select = colnames(counts) %in% anno.sub$libID)
+
+counts.dp = subset(counts, select = colnames(counts) %in% anno.dp$libID)
+counts.dn = subset(counts, select = colnames(counts) %in% anno.dn$libID)
+
+counts.d1 = subset(counts, select = colnames(counts) %in% anno.d1$libID)
+counts.d2 = subset(counts, select = colnames(counts) %in% anno.d2$libID)
+counts.d3 = subset(counts, select = colnames(counts) %in% anno.d3$libID)
+
+###
+var1 = as.data.frame(counts.dp)
+var2 = as.data.frame(counts.dn)
+var3 = as.data.frame(counts.d1)
+var4 = as.data.frame(counts.d2)
+var5 = as.data.frame(counts.d3)
+
+## combine count subsets for plotting
+counts.mast = data.frame(cbind(var1, var2)) #  
+names = as.character(anno.sub$libID)
+
+counts.mast = counts.mast[c(names)]
+
+counts.de = counts.mast
+
+mc = data.frame(symbol = row.names(counts.de), counts.de)
+mc = melt(mc)
+
+mc$set = ifelse(mc$variable %in% anno.dp$libID, "DH", "DL")
+
+mc$donor = ifelse(mc$variable %in% anno.d1$libID, "Responder 1", 
+				ifelse(mc$variable %in% anno.d2$libID, "Responder 2",
+				ifelse(mc$variable %in% anno.d3$libID, "Responder 3","other")))
+
+#### subset genes
+
+ir = c("CD160", "KLRG1", "TIGIT", "PDCD1", "LAG3","HAVCR2")# all except pdcd1 sig different between dp and dn (1e-2)
+eff = c("IFNG", "GZMA", "GZMB", "GZMH", "GZMK", "PRF1")# all except gzmb sig different between dp and dn (1e-2)
+tfs.sub = c("EOMES", "TBX21", "E2F1", "MAF", "STAT1", "STAT4")
+
+var = ir
+test = intersect(var, row.names(sig)); test
+
+mc.sub = subset(mc, symbol %in% var)
+
+## make plots
+dev.off()
+quartz(height =5, width =7, dpi =72)
+
+mc.sub$donor = gsub("Responder", "R", mc.sub$donor)
+mc.sub$set <- factor(mc.sub$set, levels= c("DL", "DH"))
+
+ggplot(mc.sub, aes(x = set, y = log2(value+1))) + geom_jitter(aes(group = donor, color = donor)) + facet_wrap(~symbol, nrow = 2) + theme(legend.position='none') + scale_color_manual(values= cbPalette)
+
+last_plot() + stat_summary(fun.y=mean, geom="point", shape=95, size=15, col="red") 
+last_plot() + labs(x = "", y = "Normalized reads, \nlog2(RPM+1)")
+last_plot() + scale_y_continuous(breaks = c(0,5,10))
+
+xnames = as.character(unique(mc.sub$symbol))
+ynames = as.character(unique(mc.sub$set))
+
+ncx = length(xnames)
+ncy = length(ynames)
+
+DF = data.frame(as.character(), as.numeric(), as.character(), stringsAsFactors = F)
+
+for (i in 1:ncx) {
+
+gene = xnames[i]
+qsub = subset(mc.sub, symbol == gene)
+
+var1 = ynames[1]
+var2 = ynames[2]
+rsub = subset(qsub, set == var1)
+ssub = subset(qsub, set == var2)
+test = wilcox.test(rsub$value, ssub$value)
+pval = as.numeric(test$p.value)
+ast = ifelse((pval <0.04 & pval>=0.01), "*",
+		ifelse((pval <0.01 & pval>=0.001), "**",
+			ifelse((pval <0.001 & pval>=0.0001), "***",
+				ifelse(pval<0.0001, "****", ""))))
+
+result = c(gene, pval, ast)
+DF[i,] = result
+	}
+	

@@ -1,0 +1,111 @@
+rm(list = ls())
+
+library(ggplot2); theme_set(theme_bw(20)); library(reshape2)
+update_geom_defaults("point", aes(size = 6))
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+cbPalette = c("#009E73","#D55E00","#0072B2")
+
+## load annotation
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/WB_RNA-seq")
+anno.correct <- read.delim("P54_full_simplified_anno_corrected.txt",stringsAsFactors = F)
+anno = anno.correct
+anno = anno[,1:15]
+all.auc = subset(anno, anno$AUC_Percent_of_Baseline>0)
+all.auc.dups = as.data.frame(all.auc[duplicated(all.auc$Sample_ID), ])
+all.auc.dr = subset(all.auc, !all.auc$libID %in% all.auc.dups[,"libID"])
+row.names(all.auc.dr) = all.auc.dr$libID
+
+## load counts
+setwd("~/Dropbox/AbATE/RNAseq/redo_RNAseq_for_paper/")
+counts = readRDS("combined_ABATE_TMM_batch_corrected_counts_after_qc_063016.rds")
+
+counts.sub = counts
+counts.sub.auc = subset(counts.sub, select = colnames(counts.sub) %in% all.auc.dr$libID)
+
+counts.sub.auc.names = counts.sub.auc
+
+tnorm = t(counts.sub.auc.names)
+
+tnormdf = as.data.frame(tnorm) # convert matrix into data frame
+
+#### merge AUC and tnormdf
+tnormdf.auc = merge(all.auc.dr, tnormdf, by = "row.names")
+tnormdf.auc = tnormdf.auc[,-(2:11)]
+row.names(tnormdf.auc) = tnormdf.auc[,1]
+tnormdf.auc = tnormdf.auc[,-(1:4)]
+tnormdf.auc = tnormdf.auc[,-(1)]
+colnames(tnormdf.auc)[1] = c("AUC")
+
+#################################
+##### ggplot correlation EOMES AUC samples minus zero time
+
+#### use y variable from random permutation script 
+# iterative_correlations_AbATE_AUC_permuted_by_visit.R
+
+r = subset(all.auc.dr, responder == "Yes")
+c = subset(all.auc.dr, treatment == "Control")
+nr = subset(all.auc.dr, treatment == "Control" & responder == "No")
+
+zero = subset(all.auc.dr, visit_month == 0)
+six = subset(all.auc.dr, visit_month == 6)
+twelve = subset(all.auc.dr, visit_month == 12)
+
+y = subset(tnormdf.auc, !row.names(tnormdf.auc) %in% zero$libID)
+colnames(y)[1] = c("AUC")
+
+y$Status = ifelse(row.names(y) %in% r$libID, "R", ifelse(row.names(y) %in% nr$libID, "NR", "C"))
+#y$visit = ifelse(row.names(y) %in% zero$libID, "0", ifelse(row.names(y) %in% six$libID, "26", ifelse(row.names(y) %in% twelve$libID, "52","104"))) # weeks
+y$visit = ifelse(row.names(y) %in% zero$libID, "0", ifelse(row.names(y) %in% six$libID, "6", ifelse(row.names(y) %in% twelve$libID, "12","24")))
+
+#y$visit = factor(y$visit, levels = c(26, 52, 104)) # for weeks
+y$visit = factor(y$visit, levels = c(6, 12, 24))
+
+dev.off()
+quartz(width=7,height=5,dpi=72)  ### heaatmap too big for RStudio
+
+ggplot(y, aes(y = AUC, x = log2(EOMES+1))) + geom_point(aes(colour = Status, shape = visit)) + scale_colour_manual(values=cbPalette)
+last_plot() + labs(x = "EOMES, log2(RPM+1)", y = "AUC, % Baseline")
+last_plot() + geom_smooth(method=lm, se = F)
+
+## calculatte Pearson's correlation coefficient between EOMES and AUC
+cor(y$AUC, log2(y$EOMES+1)) # 0.39
+
+## write correlations to a file 
+df = data.frame(AUC = y$AUC, EOMES = y$EOMES)
+row.names(df) = row.names(y)
+
+setwd("~/Desktop/GitHub/data_files/WB_RNA-seq/")
+filename ="RNAseq_EOMES_AUC_correlations.txt"
+write.table(df, filename, sep = "\t", quote = F, row.names = T, col.names = T)
+
+###############################################################
+## EBV reactivation
+# Herold et al reported that 10 subjects in the AbATE study became EBV-PCR-positive after treatment (Herold KC, et al.,. Teplizumab (anti-CD3 mAb) treatment preserves C-peptide responses in patients with new-onset type 1 diabetes in a randomized controlled trial: metabolic and immunologic features at baseline identify a subgroup of responders. Diabetes. 2013 Nov;62(11):3766-74.). To test for a relationship between EOMES levels, AUC and EBV reactivation, we identified subjects who reactivated EBV on plts of EOMES versus AUC.
+
+# IDs of suubjects who reactivted EBV
+
+ids = c("003011", "007014", "001001", "002011", "002014", "002017", "005003", "005008", "007011", "007020")
+a = 003011
+a = c(003011, 007014, 001001)
+
+colnames(all.auc.dr)
+df = all.auc.dr
+df = df[-(1:nrow(df)),]
+
+ncx = length(ids)
+
+for(i in 1:ncx){
+	q = ids[i]
+	ebv = all.auc.dr[grep(q, all.auc.dr$Participant_ID), ]
+	DF = rbind(df, ebv)
+	df = DF
+	}
+##
+
+EBV = ifelse(row.names(y) %in% DF$libID, "YES", "NO")
+
+ggplot(y, aes(y = AUC, x = log2(EOMES+1))) + geom_point(aes(colour = EBV, shape = visit)) + scale_colour_manual(values=cbPalette)
+last_plot() + labs(x = "EOMES, log2(RPM+1)", y = "AUC, % Baseline")
+last_plot() + geom_smooth(method=lm, se = F)
+

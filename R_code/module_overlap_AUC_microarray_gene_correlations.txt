@@ -1,0 +1,78 @@
+
+### calculate overlaps between C-peptide-correlated genes and immune modules. Use two sets of modules: 1. "Broad modules" (N. Novershtern, et al., Densely interconnected transcriptional circuits control cell states in human hematopoiesis, Cell 144, 296–309 (2011)); and 2) "PLOS1 modules" (P. S. Linsley, et al., Copy number loss of the interferon gene cluster in melanomas is linked to reduced T cell infiltrate and poor patient prognosis, PloS One 9, e109760 (2014)).
+
+rm(list = ls())
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/microarray/")
+
+for.overlap <- read.delim("log2_gene_expression_AUC_correlations_microarray_analysis.txt", stringsAsFactors=FALSE)
+colnames(for.overlap)[1] = c("symbol")
+
+for.overlap = for.overlap[order(-for.overlap$AUC), ]
+
+#for.overlap <- for.overlap[sample(nrow(for.overlap)),] # for random order
+
+cuts = as.data.frame(c(0,25,50,100,200,400,800))
+
+broad <- read.delim("~/Dropbox/AbATE/microarray_data/redo2_for_paper/Broad_modules_with_NAs.gmx", header=T, stringsAsFactors=FALSE)
+broad = broad[,1:80]
+
+plos1 <- read.delim("~/Dropbox/AbATE/microarray_data/redo2_for_paper/Supp_Table_1_Genes in immune molecular modules.gmx", stringsAsFactors=FALSE)
+
+y = broad
+
+y.mods = as.data.frame(colnames(y))
+
+ncx = nrow(cuts)
+ncy = nrow(y.mods)
+ynames = y.mods
+
+for (j in seq_len(ncx)) {
+  max = cuts[j,]
+  x = for.overlap[1:max,]
+  N <- ncy
+  result = length(seq_len(ncy))
+  DF <- data.frame(num=rep(NA, N))
+  DF = cbind(DF,DF,DF,DF,DF,DF,DF,DF)
+  xvar = as.data.frame(x[,1])
+  corrset = paste("set", "size", as.character(max), sep = "_")
+  
+  for (i in seq_len(ncy)) {
+  q = as.character(ynames[i,])
+  qsub = data.frame(y[,q])
+  qsub = na.omit(qsub)
+  handfull = length(unique(qsub[,1]))
+  uniquni = as.data.frame(unique(for.overlap[,1]))
+  black = as.data.frame(xvar)
+  black = na.omit(black)
+  blacklen = nrow(black)
+  blacktotal = length(intersect(xvar[,1], uniquni[,1]))
+  blacktotal = blacklen
+  blackpull = length(unique(intersect(black[,1], qsub[,1])))
+  r = paste(corrset)
+  s = as.character(unique(intersect(black[,1], qsub[,1])))
+  t = ifelse(length(s>0),  paste("",s,"",collapse=", ",sep=""), "no_overlap")
+  universe = nrow(uniquni)
+  whitetotal = universe -blacktotal
+  pvalue = phyper(blackpull, blacktotal, whitetotal, handfull, lower.tail =F)
+  DF[i,] = c(q, r, blackpull, blacktotal, whitetotal, handfull, pvalue,t)  						
+}
+
+DF = na.omit(DF)
+DF[,4] = as.numeric(DF[,4])
+tf.p.cor.none = as.data.frame(p.adjust(DF[,7], method = c("none")))
+tf.p.cor.bonferroni = as.data.frame(p.adjust(DF[,7], method = c("bonferroni")))
+tf.p.cor.bh = as.data.frame(p.adjust(DF[,7], method = c("BH")))
+DF.cor = cbind(DF, tf.p.cor.none,tf.p.cor.bonferroni,tf.p.cor.bh )
+DF.cor.ro = DF.cor[c(1:7,9:11,8)]
+colnames(DF.cor.ro) = c("module_name","AUC_set_name", "overlap", "AUC_set_size", "universe", "module_size", "p", "p-none", "p-Bonn", "p-BH", "overlap_IDs")	
+#filename = paste(corrset,"enrichment_Broad_modules_in_AbATE_AUC_log2_correlated_genes.txt", sep = "_")
+filename = paste(corrset,"enrichment_Broad_modules_in_AbATE_AUC_log2_correlated_genes_random_order.txt", sep = "_")
+#filename = paste(corrset,"enrichment_PLOS1_modules_in_AbATE_AUC_log2_correlated_genes.txt", sep = "_")
+#filename = paste(corrset,"enrichment_PLOS1_modules_in_AbATE_AUC_log2_correlated_genes_random_order.txt", sep = "_")
+
+setwd("~/Desktop/GitHub/data_files/microarray/")
+
+write.table(DF.cor.ro, filename, sep = "\t", quote = F, row.names = F)
+}

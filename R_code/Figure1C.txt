@@ -1,0 +1,59 @@
+## GSEA plot
+rm(list = ls())
+library(gdata)
+library(ggplot2); theme_set(theme_bw(20)); library(reshape2)
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+update_geom_defaults("point", aes(size = 4))
+update_geom_defaults("line", aes(size = 2))
+
+cbPalette = (c('#0072B2','#E69F00','#F0E442'))
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/microarray/")
+
+## read GSEA output data from text file
+
+EOMES.mod <- read.delim("EOMES.MOD.txt", stringsAsFactors=FALSE)
+
+
+######## run here
+ngenes = c(34602)
+
+mod = c("EOMES")
+var = paste(mod, ".mod", sep = "")
+
+visit = c("26")
+FDR = c("FDR = 0.020")
+
+title = paste(var, ", visit ", visit, sep = "")
+title = paste(var, sep = "")
+title = paste(mod, "module", sep = " ")
+
+filename = paste(var, "visit", visit, "pdf", sep = ".")
+
+rt = get(var)
+rt.s = rt[c(6,8)]
+first.row = data.frame(RANK.IN.GENE.LIST = 0, RUNNING.ES = 0)
+last.row = data.frame(RANK.IN.GENE.LIST = ngenes, RUNNING.ES = 0)
+rt.t = rbind(first.row, rt.s, last.row)
+dev.off()
+quartz(width=7,height=5,dpi=72)  ### heaatmap too big for RStudio
+
+
+ggplot(rt.t, aes(x = RANK.IN.GENE.LIST, y = RUNNING.ES)) + geom_line(colour = "blue")
+last_plot() + scale_y_continuous(limits = c(-0.7,0.7))
+last_plot() + geom_hline(yintercept = 0)
+last_plot() + geom_vline(xintercept = ngenes/2, linetype="dashed")
+update_geom_defaults("rug", aes(size = 1))
+last_plot() + geom_rug(sides = "b")
+last_plot() + labs(x = "Gene rank, \nresponder (R) versus control (C)", y = "Enrichment score (ES)")
+
+X = ngenes-5000
+Y = 0.65
+last_plot() + annotate("text", X, Y, label = FDR, cex = 8)
+
+last_plot() + ggtitle(title)
+setwd("~/Desktop")
+ggsave(filename, plot = last_plot(), width=7, height=5)
+
+#### end here

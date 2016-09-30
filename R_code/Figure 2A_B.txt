@@ -1,0 +1,88 @@
+## volcano plot of EOMES high versus EOMES low sample flow data
+rm(list = ls())
+
+library(RColorBrewer)
+library(ggthemes)
+library(ggplot2); theme_set(theme_bw(20)); library(reshape2)
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+update_geom_defaults("point", aes(size = 8))
+
+cbPalette <- colorblind_pal()(8)
+cbPalette <- cbPalette[c(3,6,8,7,2,4)]
+#cbPalette = c("red","gray")
+cbShape = c(15,16, 17)
+cbShape2 = c(15,16, 17)
+
+color = c("gray")
+color.sig = cbPalette
+
+## load summary data from EOMES hi vs EOMES lo sample comparisons
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/EOMES_hi_vs_lo_flow")
+mfi <- read.csv("~/Dropbox/RNAseq/P54_Alice_Jerill_AbATE/MFI_Percentages_AllBatches_EOMES_hi_lo/MFI_pvalues_summary.csv", stringsAsFactors=FALSE)
+pct <- read.csv("~/Dropbox/RNAseq/P54_Alice_Jerill_AbATE/MFI_Percentages_AllBatches_EOMES_hi_lo/percent_pvalues_summary.csv", stringsAsFactors=FALSE)
+
+var = pct
+var$marker = gsub("Eomes", "EOMES", var$marker)
+var$marker = gsub("GrzmB", "GZMB", var$marker)
+var$marker = gsub("FoxP3", "FOXP3", var$marker)
+var$marker = gsub("Tbet", "TBX21", var$marker)
+
+cd4 = subset(var, marker_subset %in% grep("CD4", var$marker_subset, value = T))
+cd8 = subset(var, marker_subset %in% grep("CD8", var$marker_subset, value = T))
+NK = subset(var, marker_subset %in% grep("NK", var$marker_subset, value = T))
+mem = subset(var, marker_subset %in% grep("memory", var$marker_subset, value = T))
+naive = subset(var, marker_subset %in% grep("naive", var$marker_subset, value = T))
+
+var$subset = ifelse(var$X %in% cd4$X & var$X %in% naive$X, "naive CD4",
+				ifelse(var$X %in% cd4$X & var$X %in% mem$X, "memory CD4",
+					ifelse(var$X %in% cd8$X & var$X %in% naive$X, "naive CD8",
+						ifelse(var$X %in% cd8$X & var$X %in% mem$X, "memory CD8",
+							ifelse(var$X %in% NK$X, "NK or NKT","other")))))
+#
+var$type = ifelse(var$X %in% cd4$X, "CD4",
+				ifelse(var$X %in% cd8$X, "CD8",
+					ifelse(var$X %in% NK$X, "NK or NKT","other")))
+#
+var$lpval = -log10(var$pval)
+sig = c(0.05)
+var.sig = subset(var, lpval >= -log10(sig))
+
+var.sig$subset = ifelse(var.sig$X %in% cd4$X & var.sig$X %in% naive$X, "naive CD4",
+				ifelse(var.sig$X %in% cd4$X & var.sig$X %in% mem$X, "memory CD4",
+					ifelse(var.sig$X %in% cd8$X & var.sig$X %in% naive$X, "naive CD8",
+						ifelse(var.sig$X %in% cd8$X & var.sig$X %in% mem$X, "memory CD8",
+							ifelse(var.sig$X %in% NK$X, "NK or NKT","other")))))
+# Make plot
+
+dev.off()
+quartz(width=11,height=8,dpi=72)  ### 
+
+ggplot(var, aes(x = lfc, y = lpval)) + geom_point(aes(shape = type), color = color) + scale_shape_manual(values=cbShape)
+
+last_plot() + geom_point(data = var.sig,aes(x = lfc, y = lpval, shape = type, color = subset)) +  scale_shape_manual(values=cbShape2) +  scale_color_manual(values=cbPalette)
+
+last_plot() + geom_hline(yintercept = -log10(sig), lty = "dashed")
+last_plot() + geom_vline(xintercept = 0, lty = "dashed")
+
+last_plot() + scale_y_continuous(limits = c(0,4))
+last_plot() + scale_x_continuous(limits = c(-2,2)) # for pct
+last_plot() + scale_x_continuous(limits = c(-1.25,1.25)) # for mfi
+last_plot() + labs(x = "log2(fold-change), R/NR", y = "-log10(p-value)")
+last_plot() + labs(x = "log2(fold-change), \n EOMES high/EOMES low", y = "-log10(p-value)")
+
+
+query = var.sig
+left = subset(query, marker %in% c("EOMES", "FOXP3"))
+right = subset(query, !marker %in% c("EOMES", "FOXP3"))
+xr = right$lfc+0.3
+yr = right$lpval
+label.r = right$marker
+xl = left$lfc-0.3
+yl = left$lpval
+label.l = left$marker
+last_plot() + annotate("text", xr, yr, label = label.r, cex = 6)
+last_plot() + annotate("text", xl, yl, label = label.l, cex = 6)
+
+

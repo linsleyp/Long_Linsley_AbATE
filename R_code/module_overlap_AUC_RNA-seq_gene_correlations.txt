@@ -1,0 +1,99 @@
+
+#####################
+#### overlaps EOMES module and AUC-correlated genes at each visit tested by RNA-seq
+######################
+
+rm(list = ls())
+
+library(limma)
+library(statmod)
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/WB_RNA-seq/")
+counts.corr = readRDS("combined_ABATE_TMM_batch_corrected_counts_after_qc_063016.rds")
+anno <- read.delim("~/Dropbox/AbATE/RNAseq/redo_RNAseq_for_paper/AbATE_anno_qc_outliers_dups_removed.txt", stringsAsFactors=FALSE)
+
+counts = counts.corr
+
+#trim and reformat anno
+all.auc = subset(anno, anno$AUC_Percent_of_Baseline>0)
+all.auc = anno
+all.auc.dups = as.data.frame(all.auc[duplicated(all.auc$Sample_ID), ])
+all.auc.dr = subset(all.auc, !all.auc$libID %in% all.auc.dups[,"libID"])
+row.names(all.auc.dr) = all.auc.dr$libID
+
+visit.0 = subset(all.auc.dr, all.auc.dr$visit_month == "0")
+visit.6 = subset(all.auc.dr, all.auc.dr$visit_month == "6")
+visit.12 = subset(all.auc.dr, all.auc.dr$visit_month == "12")
+visit.24 = subset(all.auc.dr, all.auc.dr$visit_month == "24")
+
+## subset counts
+counts.sub = counts
+counts.sub.auc = subset(counts.sub, select = colnames(counts.sub) %in% all.auc.dr$libID)
+
+counts.sub.auc.names =  counts.sub.auc
+
+## transpose counts so that libIDs are observations (rows) and genes are variables (columns)
+tnormm = as.matrix(t(counts.sub.auc.names[,3:183]))
+tnormdf = as.data.frame(tnormm) # convert matrix into data frame
+
+#### merge AUC and tnormdf
+tnormdf.auc = merge(all.auc.dr, tnormdf, by = "row.names")
+tnormdf.auc = tnormdf.auc[,-(2:15)]
+row.names(tnormdf.auc) = tnormdf.auc[,1]
+tnormdf.auc = tnormdf.auc[,-(1)]
+colnames(tnormdf.auc)[1] = c("AUC")
+
+#################
+tnormdf.auc.0 = subset(tnormdf.auc, row.names(tnormdf.auc) %in% visit.0$libID)
+tnormdf.auc.6 = subset(tnormdf.auc, row.names(tnormdf.auc) %in% visit.6$libID)
+tnormdf.auc.12 = subset(tnormdf.auc, row.names(tnormdf.auc) %in% visit.12$libID)
+tnormdf.auc.24 = subset(tnormdf.auc, row.names(tnormdf.auc) %in% visit.24$libID)
+
+## load transcription factor correlated genes as in (P. S. Linsley, et al., Copy number loss of the interferon gene cluster in melanomas is linked to reduced T cell infiltrate and poor patient prognosis, PloS One 9, e109760 (2014). 
+tfs.800 <- read.delim("~/Dropbox/RNAseq/for_cate/RNAseq_TF_gene_lists/top_800_RNAseq_TF_antigen_correlated_genes.gmx")
+
+eomes.300 = as.data.frame(tfs.800[1:300,"EOMES"]) # subset to top 300 EOMES-correlated genes
+
+##############
+## select vist to analyze
+visit.df = tnormdf.auc.24
+visit.cor = cor(visit.df)
+#visit.cor = cor(log2(visit.df+1))
+
+visit.cor.AUC = subset(visit.cor, select = colnames(visit.cor) == "AUC")
+visit.cor.AUC = as.data.frame( visit.cor.AUC)
+#visit.cor.AUC = na.omit(visit.cor.EOMES)
+names = as.character(row.names(visit.cor.AUC))
+values = as.numeric(visit.cor.AUC$AUC)
+visit.cor.AUC.df = data.frame(names,as.numeric(values))
+colnames(visit.cor.AUC.df) = c("symbol", "corr")
+visit.cor.AUC.df = visit.cor.AUC.df[order(-visit.cor.AUC.df$cor),]
+
+length(intersect(visit.cor.AUC.df[1:300,1], eomes.300[,1]))
+
+#### overlap lengths
+# length.0 = 9
+# length.6 = 60
+# length.12 = 11
+# length.24 = 11
+
+# universe = 16792 genes (i.e., nrow(counts))
+
+#length(intersect(eomes.300[,1], colnames(tnormdf.auc))) #270 genes in EOMES mod- black balls
+# No. in handful = 300 (i.e., top 300 AUC-correlated genes)
+
+########### calcualte hypergeometric p-values
+phyper(9,270,(16792-270),300, lower.tail = F) # 0 month visit
+#[1] 0.02368666
+
+phyper(60,270,(16792-270),300, lower.tail = F) # 6 month visit
+#[1] 4.969797e-50
+
+phyper(11,270,(16792-270),300, lower.tail = F)  # 12 month visit
+#[1] 0.003487564
+
+phyper(11,270,(16792-270),300, lower.tail = F)  # 24 month visit
+#[1] 00.003487564
+
+
