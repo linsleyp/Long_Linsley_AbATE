@@ -1,2 +1,2 @@
 # Long_Linsley_AbATE
-Figures for: Long et al, "Partial exhaustion of CD8 T cells and clinical response to teplizumab in new-onset type 1 diabetes"
+Figures for: Long et al, "Partial exhaustion of CD8 T cells and clinical response to teplizumab in new-onset type 1 diabetes". This mansucript has now been published: S. A. Long, J. Thorpe, H. A. DeBerg, V. Gersuk, J. A. Eddy, K. M. Harris, M. Ehlers, K. C. Herold, G. T. Nepom, P. S. Linsley, Partial exhaustion of CD8 T cells and clinical response to teplizumab in new-onset type 1 diabetes. Sci. Immunol. 1, eaai7793 (2016).
