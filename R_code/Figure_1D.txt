@@ -1,0 +1,49 @@
+rm(list = ls())
+#########################################################################################################
+
+#### Plots of raw limma results
+###Volcano plot
+update_geom_defaults("point", aes(size = 6))
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/WB_RNA-seq/")
+
+## load limma results
+limma <- read.delim("limma_R_vs_C_AbATE_all_samples_corrected_input_block_Participant.txt")
+
+tt.names = limma
+
+## make volcano plot
+dev.off()
+quartz(width=7,height=7,dpi=72)  ### heaatmap too big for RStudio
+
+## sselect genes to highlight
+genes = c("CD160", "EOMES", "KIR2DS4", "GZMK", "GZMM", "GZMA")
+blue = subset(tt.names, row.names(tt.names) %in% genes)
+
+ggplot(tt.names, aes(x = logFC, y = -log10(tt.names[,5]))) + geom_point(colour = "gray") 
+last_plot() + geom_point(data = blue, aes(x = logFC, y = -log10(blue[,5])), colour = "blue")
+last_plot() + scale_x_continuous(limits = c(-2.5, 2.5))
+
+## label highlighted genes
+query = subset(tt.names, row.names(tt.names) %in% genes)
+
+left = subset(query, row.names(query) %in% c("EOMES", "GZMA", "CD160"))
+right = subset(query, row.names(query) %in% c("GZMM", "GZMK", "KIR2DS4"))
+xr = right$logFC+0.8
+yr = -log10(right[,5])
+label.r = row.names(right)
+xl = left$logFC-0.8
+yl = -log10(left[,5])
+label.l = row.names(left)
+
+last_plot() + annotate("text", xr, yr, label = label.r, cex = 8)
+last_plot() + annotate("text", xl, yl, label = label.l, cex = 8)
+
+last_plot() + labs(x = "log(fold-change)" , y = "-log10(FDR)") + theme(text = element_text(size=40))
+last_plot() + geom_hline(yintercept = -log10(0.05), lty = "dashed")
+last_plot() + geom_vline(xintercept = 0, lty = "dashed")
+
+
+

@@ -1,0 +1,84 @@
+## overlay plot
+## from http://rpubs.com/kohske/dual_axis_in_ggplot2
+
+rm(list = ls())
+library(ggplot2)
+library(gtable)
+library(grid)
+library(plyr)
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+update_geom_defaults("point", aes(size = 4))
+update_geom_defaults("line", aes(size = 3))
+
+cbPalette = c("#009E73","#D55E00","#0072B2")
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/WB_RNA-seq/")
+
+## make page on which to place plots
+grid.newpage()
+
+# two plots
+## plot 1
+
+ph = c(0.02368666, 4.969797e-50, 0.003487564, 0.003487564) ## hypergeometric p-values, for 0, 6, 12 and 24 months, respectively. Calculated using phyper function with the following variables; handful (N= 300 AUC-correlated genes at each individual visit); universe (N=16792 total black+ white balls); total black balls (N= 270 EOMES-correlated genes contained in the universe); and blackballs chosen (N = intersection of genes contained in handful and total balck balls). Calculations are detailed in R code file "module_overlap_AUC_RNA-seq_gene_correlations". 
+
+df = data.frame(p = -log10(ph), month = c(0,6, 12, 24))
+
+quartz(width=11,height=8,dpi=72)  ###
+
+ggplot(df, aes(x = month, y = p)) + geom_bar(stat = "identity", fill = "gray", width = 5)
+
+#last_plot() + scale_x_continuous(limits = c(-10,120), breaks = c(0,25,50,75,100)) # for weeks
+last_plot() + scale_x_continuous(limits = c(-3,28), breaks = c(0,6,12,18,24))
+
+p1 = last_plot() + labs(x = "Visit (month)", y = "Enrichment,\n-log10(FDR)")
+
+## plot2
+## load annotation file and subset
+
+auc <- read.delim("full_C-Peptide 4-hour AUC_trimmed.txt", header=T, stringsAsFactors=FALSE)
+auc$Status = ifelse(auc$treatment == "Control", "C",
+				ifelse(auc$treatment == "hOKT3" & auc$responder == "No", "NR",
+					ifelse(auc$treatment == "hOKT3" & auc$responder == "Yes", "R", "other")))
+auc = subset(auc, !Visit_Month == 18)
+
+cdata <- ddply(auc, c( "Status", "Visit_Month"), plyr::summarise,
+               N    = length(Status),
+               mean = mean(AUC_Percent_of_Baseline),
+               sd   = sd(AUC_Percent_of_Baseline),
+               se   = sd / sqrt(N)
+)
+
+ggplot(cdata, aes(x = Visit_Month, y = mean)) + geom_line(aes(group = Status, colour = Status)) + geom_point(aes(colour = Status)) + scale_color_manual(values=cbPalette)
+last_plot() + geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd, colour = Status), width=2) 
+last_plot() + scale_x_continuous(limits = c(-10,120), breaks = c(0,25,50,75,100))# for weeks
+last_plot() + scale_x_continuous(limits = c(-3,28), breaks = c(0,6,12,18,24))
+
+last_plot() + scale_color_manual(values=cbPalette)
+p2 = last_plot() + labs(x = "Visit (week)", y = "AUC, \n% baseline")
+p2 = p2 + theme(legend.position='none')
+
+p2 = last_plot() + theme_bw(26) %+replace% theme(panel.background = element_rect(fill = NA), panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# extract gtable
+g1 <- ggplot_gtable(ggplot_build(p1))
+g2 <- ggplot_gtable(ggplot_build(p2))
+
+# overlap the panel of 2nd plot on that of 1st plot
+pp <- c(subset(g1$layout, name == "panel", se = t:r))
+g <- gtable_add_grob(g1, g2$grobs[[which(g2$layout$name == "panel")]], pp$t, 
+    pp$l, pp$b, pp$l)
+
+# axis tweaks
+ia <- which(g2$layout$name == "axis-l")
+ga <- g2$grobs[[ia]]
+ax <- ga$children[[2]]
+ax$widths <- rev(ax$widths)
+ax$grobs <- rev(ax$grobs)
+ax$grobs[[1]]$x <- ax$grobs[[1]]$x - unit(1, "npc") + unit(0.15, "cm")
+g <- gtable_add_cols(g, g2$widths[g2$layout[ia, ]$l], length(g$widths) - 1)
+g <- gtable_add_grob(g, ax, pp$t, length(g$widths) - 1, pp$b)
+
+# draw it
+grid.draw(g)

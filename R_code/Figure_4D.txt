@@ -1,0 +1,51 @@
+
+#DH cells +/- PVR-Fc
+rm(list = ls())
+
+library(ggplot2); theme_set(theme_bw(20)); library(reshape2)
+update_geom_defaults("point", aes(size = 4))
+theme_set(theme_bw(26) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(legend.key = element_blank()))
+
+## working directory assumed to be inside a GitHub folder on Mac Desktop
+setwd("~/Desktop/GitHub/data_files/DN_DH_bulk/")
+
+var1 <- read.delim("anno.6.u_vs_anno.6.s_limma_only_model_combined_bulk_p54_6_9_raw_redo.txt", stringsAsFactors=FALSE) # use p54_6 only
+var1$logFC = -var1$logFC # for p54_6 only
+
+var2 <- read.delim("dp_vs_pvr_limma_pvr_only_model_combined_bulk_p54_6_9_11_13_raw.txt", stringsAsFactors=FALSE) ## stim vs stim+PVR, var2
+
+#### 
+
+sig.var = var2
+colnames(sig.var)[5] = c("FDR")
+cut = c(5e-2)
+sig = subset(sig.var, sig.var$FDR<cut) 
+sig.up = subset(sig, logFC>0); nrow(sig.up) #
+sig.dn = subset(sig, logFC<0); nrow(sig.dn) #
+
+m = merge(sig, var1, by = "row.names")
+colnames(m)[1] = c("symbol")
+row.names(m) = query2$symbol
+
+green <- read.table("Greenough_EBV_CD8_sig.txt", quote="\"", comment.char="", stringsAsFactors=FALSE)
+query2 = subset(m, m[,1] %in% green[,1] & FDR<cut) # 8/99 green genes at cut - 0.01; 15 genes at FDR =0.05
+qgenes = c("IFNG","IL21","IL2RA", "IL7R","IRF4", "LAG3","STAT3", "TCF7","CX3CR1", "ZNF683")
+
+qsub = subset(query2, symbol %in% qgenes)
+
+pvalue = phyper(15, 99, 15749-99, 463, lower.tail =F); pvalue = 2.9e-8
+
+dev.off()
+quartz(width=10,height=8,dpi=72)  ### heaatmap too big for RStudio
+
+ggplot(m, aes(x = logFC.x, logFC.y)) + geom_point(colour = "grey")
+last_plot() + geom_point(data =qsub, aes(x = logFC.x, logFC.y), colour = "blue")
+
+X = qsub[,2]
+Y = qsub[,(8)] + 1 #the last term is an offset- needs to ba adjusted for coord sys.
+label = data.frame(qsub$symbol)
+last_plot() + annotate("text", X, Y, label = label[,1], cex = 6)
+last_plot() + labs(x = "Regulated by PVR-Fc during anti-CD3/CD28 stim., \nlogFC(PVR-Fc treated vs PVR-Fc untreated)", y = "Regulated by anti-CD3/CD28,\nLogFC, unstim. vs.stim.")
+last_plot() + geom_smooth(method=lm, se = F)
+
+cor(m$logFC.x, m$logFC.y) #-0.79

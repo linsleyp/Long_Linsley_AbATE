@@ -1,0 +1,51 @@
+rm(list = ls())
+
+library(WGCNA) # use for reportedly faster cor function
+
+setwd("~/Desktop/GitHub/data_files/microarray/")
+
+## load annotation and subset
+anno <- read.delim("AbATE_12_month_samples_tested_on_microarrays_w_all_AUC_calcs.txt")
+
+ea = subset(anno, label %in% grep("EA", anno$label, value = T))
+fi = subset(anno, label %in% grep("FI", anno$label, value = T))
+
+dups = anno[duplicated(anno$full_ID),]
+outliers <- read.table("FI_outlier_samples_to_remove.txt", quote="\"")
+anno.or = subset(anno, !anno$label %in% outliers[,1])
+all.auc.not.dup = as.data.frame(anno.or[!duplicated(anno.or$full_ID), ])
+a = all.auc.not.dup
+a$status = gsub("Control", "C", a$status)
+
+## load C-peptide values
+auc <- read.delim("AbATE_samples_tested_on_microarrays_w_AUC_values.txt")
+row.names(auc) = auc$sample
+
+## load normalized microarray data, re-format and merge with C-peptide values. 
+norm <- read.delim("P54_6HT12_Hybridization_rsn_normalized_collapsed_to_symbols.txt")
+row.names(norm) = norm$symbol
+norm = norm[,-1] 
+norm = subset(norm, select = colnames(norm) %in% a$label) 
+
+norm = as.matrix(norm)
+
+## transpose merged counts/C-peptide data so that obervations are rows and variables are columns
+tnorm = t(norm)
+tnormdf = data.frame(tnorm)
+tnormdf.auc = merge(auc, tnormdf, by = "row.names")
+row.names(tnormdf.auc) = tnormdf.auc[,1]
+tnormdf.auc = tnormdf.auc[,-(1:2)]
+
+## prpare correlation matrix 
+cor.mat = cor(log2(tnormdf.auc), use = "pairwise.complete.obs")
+
+df = data.frame(row.names(cor.mat), AUC = cor.mat[,"AUC"])
+
+## extract C-peptide (AUC)-correlated genes and save file
+for.overlap = df[order(-df$AUC),]
+
+setwd("~/Desktop/GitHub/data_files/microarray/")
+
+filename = "log2_gene_expression_AUC_correlations_microarray_analysis.txt"
+write.table(for.overlap, filename, sep = "\t", quote = F, row.names = T, col.names = T)
+
